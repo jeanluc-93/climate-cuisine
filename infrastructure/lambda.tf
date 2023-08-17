@@ -52,7 +52,7 @@ resource "aws_lambda_function" "GetWeather" {
   timeout       = 30
   environment {
     variables = {
-      awsregion = "${var.default_region}"
+      awsregion = "af-south-1"
     }
   }
   depends_on = [aws_iam_role_policy_attachment.attach_lambda_policy_to_iam_role]
