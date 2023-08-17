@@ -22,3 +22,12 @@ go.work
 
 # Binary distributables
 .dist
+
+# Ignore Terraform CLI config files
+.terraformrc
+terraformrc
+.DS_Store
+.terraform.lock.hcl
+
+# Local .terraform directories
+**/.terraform/*
