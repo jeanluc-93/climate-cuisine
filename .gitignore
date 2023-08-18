@@ -31,3 +31,6 @@ terraformrc
 
 # Local .terraform directories
 **/.terraform/*
+
+# local environment file
+**/.env

@@ -41,12 +41,18 @@ resource "aws_iam_role_policy_attachment" "attach_lambda_policy_to_iam_role" {
   policy_arn = aws_iam_policy.custom_lambda_policy.arn
 }
 
+data "archive_file" "zip_go_code" {
+  type        = "zip"
+  source_dir  = "${path.module}/src/get_weather.go"
+  output_path = "${path.module}/.dist/get_weather.zip"
+}
+
 resource "aws_lambda_function" "GetWeather" {
   function_name = "GetWeather"
   description   = "AWS Lambda reaches out to an Open weather API and gets the weather forecast for the day."
   filename      = "${path.module}/.dist/get_weather.zip"
   role          = aws_iam_role.lambda_role.arn
-  handler       = "Lambda::Lambda.Function::FunctionHandler"
+  handler       = "main"
   runtime       = "go1.x"
   memory_size   = 256
   timeout       = 30
