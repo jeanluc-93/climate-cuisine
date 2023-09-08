@@ -11,7 +11,9 @@ import (
 
 	// "github.com/go-resty/resty/v2"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/joho/godotenv"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
 // Open Weather Map returned JSON as structs
@@ -72,15 +74,17 @@ type WeatherData struct {
 // Functions
 func loadAPIKey() string {
 	// Load environmental variables from .env file
-	err := godotenv.Load("../../.env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	//err := godotenv.Load("../../.env")
+	//if err != nil {
+	//	log.Fatal("Error loading .env file")
+	//}
 
 	apiKey := os.Getenv("WEATHER_API_KEY")
 	if apiKey == "" {
 		log.Fatal("Weather API key not found")
+		os.Exit(1)
 	}
+
 	return apiKey
 }
 
@@ -132,6 +136,35 @@ func lambdaHandler(ctx context.Context) (string, error) {
 	return "Hello from lambda!", nil
 }
 
+func GetSecret(config aws.Config, secretId string) (string, error) {
+	client := secretsmanager.NewFromConfig(config)
+
+	apiKey, err := client.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(secretId),
+	})
+
+	if err != nil {
+		log.Fatal("Unable to load api key from secrets manager.")
+		log.Fatal(err)
+
+		return "", err
+	}
+
+	return *apiKey.SecretString, nil
+}
+
 func main() {
+
+	// Load the AWS profile config
+	// TODO:: Read region from env variables.
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("af-south-1"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	key, err = GetSecret(cfg, "openWeatherApiKey")
+
+	// Create an AWS secrets manager client
+
 	lambda.Start(lambdaHandler)
 }

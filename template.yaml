@@ -14,19 +14,20 @@ Globals:
 Resources:
   GetWeather:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: go1.x
     Properties:
       CodeUri: ./src/get_weather
-      Handler: main
-      Runtime: provided.al2
+      Handler: get_weather
+      Runtime: go1.x
       Architectures:
         - x86_64
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          PARAM1: VALUE
       Events:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /hello
+            Path: /get_weather
             Method: GET
 
 Outputs:
