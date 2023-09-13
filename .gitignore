@@ -34,3 +34,6 @@ terraformrc
 
 # local environment file
 **/.env
+
+# Exclude sam builds - This can be done one each pc individually
+.aws-sam

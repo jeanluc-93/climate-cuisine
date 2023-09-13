@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 
-	// "github.com/go-resty/resty/v2"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -71,23 +70,6 @@ type WeatherData struct {
 	Cod        int       `json:"cod"`
 }
 
-// Functions
-func loadAPIKey() string {
-	// Load environmental variables from .env file
-	//err := godotenv.Load("../../.env")
-	//if err != nil {
-	//	log.Fatal("Error loading .env file")
-	//}
-
-	apiKey := os.Getenv("WEATHER_API_KEY")
-	if apiKey == "" {
-		log.Fatal("Weather API key not found")
-		os.Exit(1)
-	}
-
-	return apiKey
-}
-
 func makeAPIRequest(apiKey string) (string, error) {
 
 	requestUrl := "https://api.openweathermap.org/data/2.5/weather?q=Cape Town&units=metric&APPID=" + apiKey
@@ -125,8 +107,7 @@ func makeAPIRequest(apiKey string) (string, error) {
 
 func lambdaHandler(ctx context.Context) (string, error) {
 
-	apiKey := loadAPIKey()
-	_, err := makeAPIRequest(apiKey)
+	_, err := makeAPIRequest("")
 
 	if err != nil {
 		log.Fatal("Error making API request.")
@@ -136,33 +117,38 @@ func lambdaHandler(ctx context.Context) (string, error) {
 	return "Hello from lambda!", nil
 }
 
-func GetSecret(config aws.Config, secretId string) (string, error) {
-	client := secretsmanager.NewFromConfig(config)
+func GetApiKeyFromSecretsManager(config aws.Config, secretKey string) string {
+	// Create Secrets Manager client
+	svc := secretsmanager.NewFromConfig(config)
 
-	apiKey, err := client.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
-		SecretId: aws.String(secretId),
-	})
-
-	if err != nil {
-		log.Fatal("Unable to load api key from secrets manager.")
-		log.Fatal(err)
-
-		return "", err
+	getSecretValue := &secretsmanager.GetSecretValueInput{
+		SecretId:     aws.String(secretKey),
+		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
 	}
 
-	return *apiKey.SecretString, nil
+	result, err := svc.GetSecretValue(context.TODO(), getSecretValue)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+
+	// Get the secret from the returned string.
+	var apiKey string = *result.SecretString
+
+	return apiKey
 }
 
 func main() {
+	secretKey := "openWeatherApiKey"
+	region := os.Getenv("AWS_REGION") // af-south-1
 
 	// Load the AWS profile config
-	// TODO:: Read region from env variables.
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("af-south-1"))
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	key, err = GetSecret(cfg, "openWeatherApiKey")
+	_ = GetApiKeyFromSecretsManager(cfg, secretKey)
 
 	// Create an AWS secrets manager client
 
