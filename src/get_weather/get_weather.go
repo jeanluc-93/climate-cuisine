@@ -15,6 +15,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
+// Global variables
+var apiKey string
+
 // Open Weather Map returned JSON as structs
 type Coord struct {
 	Lon float64 `json:"lon"`
@@ -70,7 +73,65 @@ type WeatherData struct {
 	Cod        int       `json:"cod"`
 }
 
-func makeAPIRequest(apiKey string) (string, error) {
+// +--------------+
+// | Lambda entry |
+// +--------------+
+
+func lambdaHandler(ctx context.Context) (string, error) {
+
+	_, err := makeAPIRequest()
+
+	if err != nil {
+		log.Fatal("Error making API request.")
+	}
+
+	//return response, nil
+	return "Hello from lambda!", nil
+}
+
+func main() {
+	secretKey := os.Getenv("SECRET_KEY")
+	region := os.Getenv("REGION") // af-south-1
+
+	// Load the AWS profile config
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	SetApiKeyFromSecretsManager(cfg, secretKey)
+
+	// Create an AWS secrets manager client
+
+	lambda.Start(lambdaHandler)
+}
+
+// +-----------+
+// | Functions |
+// +-----------+
+
+// Retrieves and sets the Open weather map API key from AWS Secrets Manager.
+func SetApiKeyFromSecretsManager(config aws.Config, secretKey string) {
+	// Create Secrets Manager client
+	svc := secretsmanager.NewFromConfig(config)
+
+	getSecretValue := &secretsmanager.GetSecretValueInput{
+		SecretId:     aws.String(secretKey),
+		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
+	}
+
+	result, err := svc.GetSecretValue(context.TODO(), getSecretValue)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+
+	// Get the secret from the returned string.
+	apiKey = *result.SecretString
+}
+
+// Makes a Http request to the Open Weather Map API.
+func makeAPIRequest() (string, error) {
 
 	requestUrl := "https://api.openweathermap.org/data/2.5/weather?q=Cape Town&units=metric&APPID=" + apiKey
 
@@ -103,54 +164,4 @@ func makeAPIRequest(apiKey string) (string, error) {
 	fmt.Printf(string(body))
 
 	return string(body), nil
-}
-
-func lambdaHandler(ctx context.Context) (string, error) {
-
-	_, err := makeAPIRequest("")
-
-	if err != nil {
-		log.Fatal("Error making API request.")
-	}
-
-	//return response, nil
-	return "Hello from lambda!", nil
-}
-
-func GetApiKeyFromSecretsManager(config aws.Config, secretKey string) string {
-	// Create Secrets Manager client
-	svc := secretsmanager.NewFromConfig(config)
-
-	getSecretValue := &secretsmanager.GetSecretValueInput{
-		SecretId:     aws.String(secretKey),
-		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
-	}
-
-	result, err := svc.GetSecretValue(context.TODO(), getSecretValue)
-	if err != nil {
-		log.Fatal(err.Error())
-		os.Exit(1)
-	}
-
-	// Get the secret from the returned string.
-	var apiKey string = *result.SecretString
-
-	return apiKey
-}
-
-func main() {
-	secretKey := "openWeatherApiKey"
-	region := os.Getenv("AWS_REGION") // af-south-1
-
-	// Load the AWS profile config
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_ = GetApiKeyFromSecretsManager(cfg, secretKey)
-
-	// Create an AWS secrets manager client
-
-	lambda.Start(lambdaHandler)
 }

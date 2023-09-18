@@ -23,13 +23,18 @@ resource "aws_iam_policy" "custom_lambda_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        "Action" : [
+        Action : [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ],
-        "Resource" : "arn:aws:logs:*:*:*",
-        "Effect" : "Allow"
+        Resource : "arn:aws:logs:*:*:*",
+        Effect : Allow
+      },
+      {
+        Effect = Allow,
+        Action = ["secretsmanager:GetSecretValue"],
+        Resource = "arn:aws:secretmanager:${var.default_region}:${local.account_id}:secret:*"
       }
     ]
   })
@@ -44,21 +49,22 @@ resource "aws_iam_role_policy_attachment" "attach_lambda_policy_to_iam_role" {
 data "archive_file" "zip_go_code" {
   type        = "zip"
   source_dir  = "${path.module}/src/get_weather.go"
-  output_path = "${path.module}/.dist/get_weather.zip"
+  output_path = "${path.module}/build/get_weather.zip"
 }
 
 resource "aws_lambda_function" "GetWeather" {
   function_name = "GetWeather"
-  description   = "AWS Lambda reaches out to an Open weather API and gets the weather forecast for the day."
-  filename      = "${path.module}/.dist/get_weather.zip"
+  description   = "AWS Lambda reaches out to an Open weather map API and gets the weather forecast for the day."
+  filename      = "${path.module}/build/get_weather.zip"
   role          = aws_iam_role.lambda_role.arn
   handler       = "main"
   runtime       = "provided.al2"
-  memory_size   = 256
+  memory_size   = 128
   timeout       = 30
   environment {
     variables = {
-      awsregion = "af-south-1"
+      REGION = "${var.default_region}",
+      SECRET_KEY = "${var.openWeatherMap_apiKey_key}"
     }
   }
   depends_on = [aws_iam_role_policy_attachment.attach_lambda_policy_to_iam_role]
