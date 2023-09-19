@@ -1,15 +1,7 @@
-#.PHONY: build
-
-#build:
-#	sam build
-
 .PHONY: build clean deploy
 
 build:
 	env GOARCH=amd64 GOOS=linux go build -ldflags="-s -w" -o bin/get_weather src/get_weather/get_weather.go
-
-clean:
-	rm -rf ./bin
 
 deploy: clean build
 	sls deploy --verbose
@@ -24,3 +16,7 @@ debug-with-sam: build-sam
 
 debug:
 	sam local invoke GetWeather -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2" --skip-pull-image
+
+debug-event:
+	echo "{"city":"Cape Town"}" | \
+	sam local invoke GetWeather -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2" --event - --skip-pull-image
