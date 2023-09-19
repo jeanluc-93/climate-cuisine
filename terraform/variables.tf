@@ -25,3 +25,8 @@ variable "openWeatherMap_apiKey_value" {
     type = string
     sensitive = true
 }
+
+variable "sqs_queue_get_dinner" {
+    description = "SQS queue used to push messages to additional lambda to get dinner ideas based off of the received input."
+    type = string
+}

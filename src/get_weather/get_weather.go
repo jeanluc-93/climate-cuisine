@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
@@ -75,9 +76,14 @@ type WeatherData struct {
 	Cod        int       `json:"cod"`
 }
 
-// +-----------------------+
-// | Lambda entry functions|
-// +-----------------------+
+// Received event struct
+type Event struct {
+	City string `json:"city"`
+}
+
+// +------------------------+
+// | Lambda entry functions |
+// +------------------------+
 
 // Initialize function that sets up the running environment.
 func init() {
@@ -85,6 +91,7 @@ func init() {
 	secretKey := os.Getenv("SECRET_KEY")
 	weatherUrlKey := os.Getenv("OPEN_WEATHER_URL_KEY")
 	region := os.Getenv("REGION") // af-south-1
+	// sqsName := os.Getenv("SQS_QUEUE_NAME")
 
 	// Load the AWS profile config
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
@@ -98,15 +105,28 @@ func init() {
 }
 
 // Lambda runner/worker.
-func lambdaHandler(ctx context.Context) (string, error) {
+func lambdaHandler(ctx context.Context /*, event Event*/) (string, error) {
 
 	// Make Http request to get daily weather
-	responseData, responseError := makeAPIRequest(apiUrl, apiKey, "Cape Town")
+	responseData, responseError := makeHttpRequest(apiUrl, apiKey, "Cape Town")
 
 	if responseError != nil {
 		log.Fatal("Error making API request.")
 	}
 
+	// Extract `sub-details` for ChatGPT to supply ideas
+	subWeather := WeatherData{
+		Weather: responseData.Weather,
+		Main:    responseData.Main,
+		Wind:    responseData.Wind,
+		Clouds:  responseData.Clouds,
+		Name:    responseData.Name,
+	}
+
+	// Place details on SQS queue for lambda processing.
+	fmt.Println(subWeather)
+
+	// Inform operation is done.
 	return (fmt.Sprintf("City: %s\n", responseData.Name)), nil
 }
 
@@ -159,7 +179,7 @@ func getUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
 }
 
 // Makes a Http request to the Open Weather Map API.
-func makeAPIRequest(apiUrl string, apiKey string, city string) (WeatherData, error) {
+func makeHttpRequest(apiUrl string, apiKey string, city string) (WeatherData, error) {
 	// Format the correct request URL.
 	requestUrl := fmt.Sprintf(apiUrl, city, apiKey)
 
@@ -200,4 +220,46 @@ func makeAPIRequest(apiUrl string, apiKey string, city string) (WeatherData, err
 	}
 
 	return weatherData, nil
+}
+
+func sendWeatherToSqs(config aws.Config, queue string, topic string, subWeather WeatherData) {
+	sqsClient := sqs.NewFromConfig(config)
+
+	// Get URL of queue
+	queueInput := &sqs.GetQueueUrlInput{
+		QueueName: aws.String("TestQueue"),
+	}
+
+	result, err := sqsClient.GetQueueUrl(context.TODO(), queueInput)
+
+	if err != nil {
+		fmt.Println("Got an error getting the queue URL:")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	queueUrl := result.QueueUrl
+
+	// Serialize the sub-weather into JSON.
+	jsonWeather, err := json.Marshal(subWeather)
+
+	if err != nil {
+		fmt.Println("Not able to serialize weather data to json.")
+		os.Exit(1)
+	}
+
+	sqsMessage := &sqs.SendMessageInput{
+		MessageBody: aws.String(string(jsonWeather)),
+		QueueUrl:    queueUrl,
+	}
+
+	_, errs := sqsClient.SendMessage(context.TODO(), sqsMessage)
+
+	if errs != nil {
+		fmt.Println("Got an error sending the message:")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Weather message added to SQS.")
 }

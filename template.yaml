@@ -25,6 +25,7 @@ Resources:
           REGION: af-south-1
           SECRET_KEY: openWeatherApiKey
           OPEN_WEATHER_URL_KEY: openWeatherUrl
+          SQS_QUEUE_NAME: TestQueue
       Events:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
