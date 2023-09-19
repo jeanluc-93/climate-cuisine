@@ -13,10 +13,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 // Global variables
 var apiKey string
+var apiUrl string
 
 // Open Weather Map returned JSON as structs
 type Coord struct {
@@ -73,24 +75,15 @@ type WeatherData struct {
 	Cod        int       `json:"cod"`
 }
 
-// +--------------+
-// | Lambda entry |
-// +--------------+
+// +-----------------------+
+// | Lambda entry functions|
+// +-----------------------+
 
-func lambdaHandler(ctx context.Context) (string, error) {
-
-	_, err := makeAPIRequest()
-
-	if err != nil {
-		log.Fatal("Error making API request.")
-	}
-
-	//return response, nil
-	return "Hello from lambda!", nil
-}
-
-func main() {
+// Initialize function that sets up the running environment.
+func init() {
+	// Load environment keys from environment variables
 	secretKey := os.Getenv("SECRET_KEY")
+	weatherUrlKey := os.Getenv("OPEN_WEATHER_URL_KEY")
 	region := os.Getenv("REGION") // af-south-1
 
 	// Load the AWS profile config
@@ -99,10 +92,26 @@ func main() {
 		log.Fatal(err)
 	}
 
-	SetApiKeyFromSecretsManager(cfg, secretKey)
+	// Load API key and URL for usage.
+	getApiKeyFromSecretsManager(cfg, secretKey)
+	getUrlFromParameterStore(cfg, weatherUrlKey)
+}
 
-	// Create an AWS secrets manager client
+// Lambda runner/worker.
+func lambdaHandler(ctx context.Context) (string, error) {
 
+	// Make Http request to get daily weather
+	responseData, responseError := makeAPIRequest(apiUrl, apiKey, "Cape Town")
+
+	if responseError != nil {
+		log.Fatal("Error making API request.")
+	}
+
+	return (fmt.Sprintf("City: %s\n", responseData.Name)), nil
+}
+
+// Lambda entry point
+func main() {
 	lambda.Start(lambdaHandler)
 }
 
@@ -111,7 +120,7 @@ func main() {
 // +-----------+
 
 // Retrieves and sets the Open weather map API key from AWS Secrets Manager.
-func SetApiKeyFromSecretsManager(config aws.Config, secretKey string) {
+func getApiKeyFromSecretsManager(config aws.Config, secretKey string) {
 	// Create Secrets Manager client
 	svc := secretsmanager.NewFromConfig(config)
 
@@ -130,10 +139,29 @@ func SetApiKeyFromSecretsManager(config aws.Config, secretKey string) {
 	apiKey = *result.SecretString
 }
 
-// Makes a Http request to the Open Weather Map API.
-func makeAPIRequest() (string, error) {
+// Retrieves and sets the Open weather map URL from AWS Parameter Store.
+func getUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
+	ssmClient := ssm.NewFromConfig(config)
 
-	requestUrl := "https://api.openweathermap.org/data/2.5/weather?q=Cape Town&units=metric&APPID=" + apiKey
+	getUrlValue := &ssm.GetParameterInput{
+		Name:           aws.String(weatherUrlKey),
+		WithDecryption: aws.Bool(false),
+	}
+
+	result, err := ssmClient.GetParameter(context.TODO(), getUrlValue)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+
+	// Get the secret from the returned string.
+	apiUrl = *result.Parameter.Value
+}
+
+// Makes a Http request to the Open Weather Map API.
+func makeAPIRequest(apiUrl string, apiKey string, city string) (WeatherData, error) {
+	// Format the correct request URL.
+	requestUrl := fmt.Sprintf(apiUrl, city, apiKey)
 
 	// Send GET request
 	response, err := http.Get(requestUrl)
@@ -144,10 +172,19 @@ func makeAPIRequest() (string, error) {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode != http.StatusOK {
+		fmt.Printf("Not a 200 okay response.\n")
+		fmt.Printf("Response code: %v\n", response.StatusCode)
+		fmt.Printf("Response reason: %s\n", response.Status)
+
+		os.Exit(1)
+	}
+
 	// Read the response body
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Printf("Error reading response body: %v\n", err)
+		fmt.Printf("Error reading response body: \n %s \n", err)
+
 		os.Exit(1)
 	}
 
@@ -156,12 +193,11 @@ func makeAPIRequest() (string, error) {
 	unmarshalError := json.Unmarshal([]byte(body), &weatherData)
 
 	if unmarshalError != nil {
-		fmt.Println("Error:", err)
+		fmt.Println("Not able to deserialize Open Weather Map json response.")
+		fmt.Printf("Error: \n %s \n", unmarshalError)
+
 		os.Exit(1)
 	}
 
-	fmt.Printf("Got response")
-	fmt.Printf(string(body))
-
-	return string(body), nil
+	return weatherData, nil
 }

@@ -65,6 +65,7 @@ resource "aws_lambda_function" "GetWeather" {
     variables = {
       REGION = "${var.default_region}",
       SECRET_KEY = "${var.openWeatherMap_apiKey_key}"
+      OPEN_WEATHER_URL_KEY = "${var.openWeatherMap_Url_key}"
     }
   }
   depends_on = [aws_iam_role_policy_attachment.attach_lambda_policy_to_iam_role]

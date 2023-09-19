@@ -5,7 +5,12 @@ variable "default_region" {
 }
 
 // Variables saved in Terraform cloud workspace - loaded here.
-variable "openWeatherMap_Url" {
+variable "openWeatherMap_Url_key" {
+    description = "Reference key to load the Open Weather Map url from Parameter store."
+    type = string
+}
+
+variable "openWeatherMap_Url_value" {
     description = "URL for the Open Weather Map api."
     type = string
 }
