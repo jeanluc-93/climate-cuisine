@@ -17,7 +17,7 @@
             "request": "attach",
             "mode": "remote",
             "port": 8099,
-            "host": "localhost"
+            "host": "127.0.0.1"
         }
     ]
 }

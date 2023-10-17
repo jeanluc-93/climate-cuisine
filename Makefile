@@ -10,11 +10,14 @@ build-sam:
 	sam build
 
 debug-with-sam: build-sam
-	sam local --no-event | sam local invoke -d 9999 \
+	sam local invoke GetWeather -d 8099 \
 	--debug-args="-delveAPI=2" \
-	--debugger-path $${HOME}/go/bin/linux_amd64  MySQSQueueFunction --event -
+	--debugger-path ./delve
 
 debug:
+	sam local invoke GetWeather -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2"
+
+debug-skip:
 	sam local invoke GetWeather -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2" --skip-pull-image
 
 debug-event:
