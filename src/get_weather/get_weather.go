@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
@@ -76,6 +75,14 @@ type WeatherData struct {
 	Cod        int       `json:"cod"`
 }
 
+type SubWeatherData struct {
+	Weather []Weather `json:"weather"`
+	Main    Main      `json:"main"`
+	Wind    Wind      `json:"wind"`
+	Clouds  Clouds    `json:"clouds"`
+	Name    string    `json:"name"`
+}
+
 // Received event struct
 type Event struct {
 	City string `json:"city"`
@@ -100,8 +107,8 @@ func init() {
 	}
 
 	// Load API key and URL for usage.
-	getApiKeyFromSecretsManager(cfg, secretKey)
 	getUrlFromParameterStore(cfg, weatherUrlKey)
+	getApiKeyFromParameterStore(cfg, secretKey)
 }
 
 // Lambda runner/worker.
@@ -115,7 +122,7 @@ func lambdaHandler(ctx context.Context /*, event Event*/) (string, error) {
 	}
 
 	// Extract `sub-details` for ChatGPT to supply ideas
-	subWeather := WeatherData{
+	subWeather := SubWeatherData{
 		Weather: responseData.Weather,
 		Main:    responseData.Main,
 		Wind:    responseData.Wind,
@@ -124,7 +131,7 @@ func lambdaHandler(ctx context.Context /*, event Event*/) (string, error) {
 	}
 
 	// Place details on SQS queue for lambda processing.
-	fmt.Println(subWeather)
+	fmt.Printf("%+v\n", subWeather)
 
 	// Inform operation is done.
 	return (fmt.Sprintf("City: %s\n", responseData.Name)), nil
@@ -139,24 +146,23 @@ func main() {
 // | Functions |
 // +-----------+
 
-// Retrieves and sets the Open weather map API key from AWS Secrets Manager.
-func getApiKeyFromSecretsManager(config aws.Config, secretKey string) {
-	// Create Secrets Manager client
-	svc := secretsmanager.NewFromConfig(config)
+// Retrieves and sets the Open weather map api key from AWS Parameter Store.
+func getApiKeyFromParameterStore(config aws.Config, secretKey string) {
+	ssmClient := ssm.NewFromConfig(config)
 
-	getSecretValue := &secretsmanager.GetSecretValueInput{
-		SecretId:     aws.String(secretKey),
-		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
+	getUrlValue := &ssm.GetParameterInput{
+		Name:           aws.String(secretKey),
+		WithDecryption: aws.Bool(true),
 	}
 
-	result, err := svc.GetSecretValue(context.TODO(), getSecretValue)
+	result, err := ssmClient.GetParameter(context.TODO(), getUrlValue)
 	if err != nil {
 		log.Fatal(err.Error())
 		os.Exit(1)
 	}
 
 	// Get the secret from the returned string.
-	apiKey = *result.SecretString
+	apiKey = *result.Parameter.Value
 }
 
 // Retrieves and sets the Open weather map URL from AWS Parameter Store.
