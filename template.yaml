@@ -23,7 +23,7 @@ Resources:
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
           REGION: af-south-1
-          SECRET_KEY: openWeatherApikey
+          SECRET_KEY: openWeatherApiKey
           OPEN_WEATHER_URL_KEY: openWeatherUrl
           SQS_QUEUE_NAME: TestQueue
       Events:
