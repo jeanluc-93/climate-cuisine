@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 
@@ -19,6 +18,8 @@ import (
 // Global variables
 var apiKey string
 var apiUrl string
+var sqsName string
+var awsConfig aws.Config
 
 // Open Weather Map returned JSON as structs
 type Coord struct {
@@ -94,31 +95,47 @@ type Event struct {
 
 // Initialize function that sets up the running environment.
 func init() {
-	// Load environment keys from environment variables
+	fmt.Println("Starting initialization...")
+
 	secretKey := os.Getenv("SECRET_KEY")
 	weatherUrlKey := os.Getenv("OPEN_WEATHER_URL_KEY")
-	region := os.Getenv("REGION") // af-south-1
-	// sqsName := os.Getenv("SQS_QUEUE_NAME")
+	region := os.Getenv("REGION")
+	sqsName = os.Getenv("SQS_QUEUE_NAME")
 
-	// Load the AWS profile config
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-	if err != nil {
-		log.Fatal(err)
+	// Exit if any initialization value is not set as we need all values for a successful execution.
+	if secretKey == "" || len(secretKey) == 0 || weatherUrlKey == "" || len(weatherUrlKey) == 0 || sqsName == "" || len(sqsName) == 0 {
+		fmt.Println("One of the initialization values is not set.")
+		fmt.Printf("Secret Key: %d\n", len(secretKey))
+		fmt.Printf("Open weather map url: %d\n", len(weatherUrlKey))
+		fmt.Printf("Sqs name: %d\n", len(sqsName))
+		fmt.Println("Exiting...")
+		os.Exit(1)
 	}
 
-	// Load API key and URL for usage.
-	getUrlFromParameterStore(cfg, weatherUrlKey)
-	getApiKeyFromParameterStore(cfg, secretKey)
+	// Load the AWS profile config
+	var err error
+	awsConfig, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	if err != nil {
+		fmt.Println("Loading default AWS config failed.")
+		fmt.Println(err)
+		fmt.Println("Exiting...")
+		os.Exit(1)
+	}
+
+	getOpenWeatherMapUrlFromParameterStore(awsConfig, weatherUrlKey)
+	getOpenWeatherMapApiKeyFromParameterStore(awsConfig, secretKey)
 }
 
 // Lambda runner/worker.
 func lambdaHandler(ctx context.Context /*, event Event*/) (string, error) {
-
 	// Make Http request to get daily weather
 	responseData, responseError := makeHttpRequest(apiUrl, apiKey, "Cape Town")
 
 	if responseError != nil {
-		log.Fatal("Error making API request.")
+		fmt.Println("Making Http request to Open weather map failed.")
+		fmt.Println(responseError)
+		fmt.Println("Exiting...")
+		os.Exit(1)
 	}
 
 	// Extract `sub-details` for ChatGPT to supply ideas
@@ -133,8 +150,10 @@ func lambdaHandler(ctx context.Context /*, event Event*/) (string, error) {
 	// Place details on SQS queue for lambda processing.
 	fmt.Printf("%+v\n", subWeather)
 
+	sendWeatherToSqs(awsConfig, subWeather)
+
 	// Inform operation is done.
-	return (fmt.Sprintf("City: %s\n", responseData.Name)), nil
+	return (fmt.Sprintf("City: %s", responseData.Name)), nil
 }
 
 // Lambda entry point
@@ -147,17 +166,20 @@ func main() {
 // +-----------+
 
 // Retrieves and sets the Open weather map api key from AWS Parameter Store.
-func getApiKeyFromParameterStore(config aws.Config, secretKey string) {
-	ssmClient := ssm.NewFromConfig(config)
+func getOpenWeatherMapApiKeyFromParameterStore(config aws.Config, secretKey string) {
+	fmt.Println("Retrieving Open weather map api-key from Parameter Store.")
 
-	getUrlValue := &ssm.GetParameterInput{
+	ssmClient := ssm.NewFromConfig(config)
+	getApiKeyValue := &ssm.GetParameterInput{
 		Name:           aws.String(secretKey),
 		WithDecryption: aws.Bool(true),
 	}
 
-	result, err := ssmClient.GetParameter(context.TODO(), getUrlValue)
+	result, err := ssmClient.GetParameter(context.TODO(), getApiKeyValue)
 	if err != nil {
-		log.Fatal(err.Error())
+		fmt.Println("Retrieving Open weather map api-key from Parameter Store failed.")
+		fmt.Println(err)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
 
@@ -166,9 +188,10 @@ func getApiKeyFromParameterStore(config aws.Config, secretKey string) {
 }
 
 // Retrieves and sets the Open weather map URL from AWS Parameter Store.
-func getUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
-	ssmClient := ssm.NewFromConfig(config)
+func getOpenWeatherMapUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
+	fmt.Println("Retrieving Open weather map url from Parameter Store.")
 
+	ssmClient := ssm.NewFromConfig(config)
 	getUrlValue := &ssm.GetParameterInput{
 		Name:           aws.String(weatherUrlKey),
 		WithDecryption: aws.Bool(false),
@@ -176,7 +199,9 @@ func getUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
 
 	result, err := ssmClient.GetParameter(context.TODO(), getUrlValue)
 	if err != nil {
-		log.Fatal(err.Error())
+		fmt.Println("Retrieving Open weather map URL from Parameter store failed.")
+		fmt.Println(err)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
 
@@ -186,61 +211,70 @@ func getUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
 
 // Makes a Http request to the Open Weather Map API.
 func makeHttpRequest(apiUrl string, apiKey string, city string) (WeatherData, error) {
-	// Format the correct request URL.
-	requestUrl := fmt.Sprintf(apiUrl, city, apiKey)
+	fmt.Println("Making Http request to Open weather map.")
 
-	// Send GET request
+	// Format the correct request URL and Send request.
+	requestUrl := fmt.Sprintf(apiUrl, city, apiKey)
 	response, err := http.Get(requestUrl)
 
 	if err != nil {
-		fmt.Printf("Error sending GET request: %v\n", err)
+		fmt.Println("Making request to open weather map failed.")
+		fmt.Println(err)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		fmt.Printf("Not a 200 okay response.\n")
+		fmt.Println("WARNING. Non-200 HTTP response.")
 		fmt.Printf("Response code: %v\n", response.StatusCode)
 		fmt.Printf("Response reason: %s\n", response.Status)
-
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
 
 	// Read the response body
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Printf("Error reading response body: \n %s \n", err)
-
+		fmt.Println("Reading response body failed.")
+		fmt.Println(err)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
+
+	fmt.Println("Reading response body succeeded.")
 
 	// Deserialize/decode from json into struct
 	var weatherData WeatherData
 	unmarshalError := json.Unmarshal([]byte(body), &weatherData)
 
 	if unmarshalError != nil {
-		fmt.Println("Not able to deserialize Open Weather Map json response.")
-		fmt.Printf("Error: \n %s \n", unmarshalError)
-
+		fmt.Println("Deserializing Open Weather Map response failed.")
+		fmt.Println(unmarshalError)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
+
+	fmt.Println("Deserializing Open Weather Map response succeeded.")
 
 	return weatherData, nil
 }
 
-func sendWeatherToSqs(config aws.Config, queue string, topic string, subWeather WeatherData) {
-	sqsClient := sqs.NewFromConfig(config)
+// Place Http result on Sqs.
+func sendWeatherToSqs(config aws.Config, subWeather SubWeatherData) {
+	fmt.Println("Publishing to Sqs.")
 
-	// Get URL of queue
+	sqsClient := sqs.NewFromConfig(config)
 	queueInput := &sqs.GetQueueUrlInput{
-		QueueName: aws.String("TestQueue"),
+		QueueName: aws.String(sqsName),
 	}
 
 	result, err := sqsClient.GetQueueUrl(context.TODO(), queueInput)
 
 	if err != nil {
-		fmt.Println("Got an error getting the queue URL:")
+		fmt.Println("Retrieving the queue URL failed.")
 		fmt.Println(err)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
 
@@ -250,7 +284,9 @@ func sendWeatherToSqs(config aws.Config, queue string, topic string, subWeather 
 	jsonWeather, err := json.Marshal(subWeather)
 
 	if err != nil {
-		fmt.Println("Not able to serialize weather data to json.")
+		fmt.Println("Serializing weather data failed.")
+		fmt.Println(err)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
 
@@ -262,10 +298,11 @@ func sendWeatherToSqs(config aws.Config, queue string, topic string, subWeather 
 	_, errs := sqsClient.SendMessage(context.TODO(), sqsMessage)
 
 	if errs != nil {
-		fmt.Println("Got an error sending the message:")
-		fmt.Println(err)
+		fmt.Println("Publishing to Sqs failed.")
+		fmt.Println(errs)
+		fmt.Println("Exiting...")
 		os.Exit(1)
 	}
 
-	fmt.Println("Weather message added to SQS.")
+	fmt.Println("Publishing to Sqs sucessful.")
 }
