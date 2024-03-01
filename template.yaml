@@ -26,14 +26,29 @@ Resources:
           SECRET_KEY: openWeatherApiKey
           OPEN_WEATHER_URL_KEY: openWeatherUrl
           SQS_QUEUE_NAME: get-dinner
+  GetDinner:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/get_dinner
+      Handler: get_dinner
+      Runtime: go1.x
+      Architectures:
+        - x86_64
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          REGION: af-south-1
       Events:
-        CatchAll:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /get_weather
-            Method: GET
+        SqsEvent:
+          Type: SQS
+
+  #MySqsQueue:
+  #  Type: AWS::SQS::Queue
 
 Outputs:
   GetWeather:
     Description: "Get weather Lambda Function ARN"
     Value: !GetAtt GetWeather.Arn
+
+  GetDinner:
+    Description: "Get diiner Lambda Function ARN"
+    Value: !GetAtt GetDinner.Arn

@@ -20,6 +20,12 @@ debug:
 debug-skip:
 	sam local invoke GetWeather -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2" --skip-pull-image
 
+debug2:
+	sam local invoke GetDinner -e ./events/sam_sqs_event.json -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2"
+
+debug2-skip:
+	sam local invoke GetDinner -e ./events/sam_sqs_event.json -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2" --skip-pull-image
+
 debug-event:
 	echo "{"city":"Cape Town"}" | \
 	sam local invoke GetWeather -d 8099 --debugger-path ./delve/ --debug-args "-delveAPI=2" --event - --skip-pull-image

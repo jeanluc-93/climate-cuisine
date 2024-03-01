@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
@@ -70,67 +70,32 @@ type Ingredient struct {
 // | Lambda entry functions |
 // +------------------------+
 
-// Initialize function that sets up the running environment.
-func init() {
-	fmt.Println("Starting initialization...")
-
-	secretKey := os.Getenv("SECRET_KEY")
-	weatherUrlKey := os.Getenv("OPEN_WEATHER_URL_KEY")
-	region := os.Getenv("REGION")
-	sqsName = os.Getenv("SQS_QUEUE_NAME")
-
-	// Exit if any initialization value is not set as we need all values for a successful execution.
-	if secretKey == "" || len(secretKey) == 0 || weatherUrlKey == "" || len(weatherUrlKey) == 0 || sqsName == "" || len(sqsName) == 0 {
-		fmt.Println("One of the initialization values is not set.")
-		fmt.Printf("Secret Key: %d\n", len(secretKey))
-		fmt.Printf("Open weather map url: %d\n", len(weatherUrlKey))
-		fmt.Printf("Sqs name: %d\n", len(sqsName))
-		fmt.Println("Exiting...")
-		os.Exit(1)
-	}
-
-	// Load the AWS profile config
-	var err error
-	awsConfig, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-	if err != nil {
-		fmt.Println("Loading default AWS config failed.")
-		fmt.Println(err)
-		fmt.Println("Exiting...")
-		os.Exit(1)
-	}
-
-	getChatGPTUrlFromParameterStore(awsConfig, weatherUrlKey)
-	getChatGPTApiKeyFromParameterStore(awsConfig, secretKey)
-}
-
 // Lambda runner/worker.
-func lambdaHandler(ctx context.Context /*, event Event*/) (string, error) {
-	// Make Http request to get daily weather
-	responseData, responseError := makeHttpRequest(apiUrl, apiKey, "Cape Town")
+func lambdaHandler(ctx context.Context, sqsEvent events.SQSEvent) (string, error) {
 
-	if responseError != nil {
-		fmt.Println("Making Http request to Open weather map failed.")
-		fmt.Println(responseError)
-		fmt.Println("Exiting...")
-		os.Exit(1)
-	}
+	weatherDataString := sqsEvent.Records[0].Body
+
+	fmt.Println(weatherDataString)
 
 	// Extract `sub-details` for ChatGPT to supply ideas
-	subWeather := SubWeatherData{
-		Weather: responseData.Weather,
-		Main:    responseData.Main,
-		Wind:    responseData.Wind,
-		Clouds:  responseData.Clouds,
-		Name:    responseData.Name,
-	}
+	/*
+		subWeather := SubWeatherData{
+			Weather: responseData.Weather,
+			Main:    responseData.Main,
+			Wind:    responseData.Wind,
+			Clouds:  responseData.Clouds,
+			Name:    responseData.Name,
+		}
+	*/
 
 	// Place details on SQS queue for lambda processing.
-	fmt.Printf("%+v\n", subWeather)
+	// fmt.Printf("%+v\n", subWeather)
 
-	sendWeatherToSqs(awsConfig, subWeather)
+	// sendWeatherToSqs(awsConfig, subWeather)
 
 	// Inform operation is done.
-	return (fmt.Sprintf("City: %s", responseData.Name)), nil
+	// return (fmt.Sprintf("City: %s", responseData.Name)), nil
+	return "In development.", nil
 }
 
 // Lambda entry point
@@ -140,7 +105,7 @@ func main() {
 
 // +-----------+
 // | Functions |
-// +-----------+
+// +-----------+ 
 
 // Retrieves and sets the Open weather map api key from AWS Parameter Store.
 func getChatGPTApiKeyFromParameterStore(config aws.Config, secretKey string) {
@@ -187,7 +152,7 @@ func getChatGPTUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
 }
 
 // Makes a Http request to the Open Weather Map API.
-func makeHttpRequest(apiUrl string, apiKey string, city string) (struct{}, error) {
+func makeHttpRequest(apiUrl string, apiKey string, city string) (string, error) {
 	fmt.Println("Making Http request to Open weather map.")
 
 	// Format the correct request URL and Send request.
