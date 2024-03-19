@@ -12,6 +12,13 @@
             "program": "src/get_weather/get_weather.go"
         },
         {
+            "name": "Launch Get Dinner",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "src/get_dinner/get_dinner.go"
+        },
+        {
             "name": "Debug with SAM",
             "type": "go",
             "request": "attach",
