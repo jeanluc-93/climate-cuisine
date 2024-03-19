@@ -77,6 +77,8 @@ func lambdaHandler(ctx context.Context, sqsEvent events.SQSEvent) (string, error
 
 	fmt.Println(weatherDataString)
 
+	aiMessage := fmt.Sprintf("Can you please supply me with 5 dinner ideas for the supplied weather data?")
+
 	// Extract `sub-details` for ChatGPT to supply ideas
 	/*
 		subWeather := SubWeatherData{
@@ -105,11 +107,11 @@ func main() {
 
 // +-----------+
 // | Functions |
-// +-----------+ 
+// +-----------+
 
-// Retrieves and sets the Open weather map api key from AWS Parameter Store.
-func getChatGPTApiKeyFromParameterStore(config aws.Config, secretKey string) {
-	fmt.Println("Retrieving ChatGPT api-key from Parameter Store.")
+// Retrieves and sets the ClaudeAI api key from AWS Parameter Store.
+func getClaudeApiKeyFromParameterStore(config aws.Config, secretKey string) {
+	fmt.Println("Retrieving Claude api-key from Parameter Store.")
 
 	ssmClient := ssm.NewFromConfig(config)
 	getApiKeyValue := &ssm.GetParameterInput{
@@ -119,7 +121,7 @@ func getChatGPTApiKeyFromParameterStore(config aws.Config, secretKey string) {
 
 	result, err := ssmClient.GetParameter(context.TODO(), getApiKeyValue)
 	if err != nil {
-		fmt.Println("Retrieving ChatGPT api-key from Parameter Store failed.")
+		fmt.Println("Retrieving Claude api-key from Parameter Store failed.")
 		fmt.Println(err)
 		fmt.Println("Exiting...")
 		os.Exit(1)
@@ -130,8 +132,8 @@ func getChatGPTApiKeyFromParameterStore(config aws.Config, secretKey string) {
 }
 
 // Retrieves and sets the Open weather map URL from AWS Parameter Store.
-func getChatGPTUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
-	fmt.Println("Retrieving ChatGPT url from Parameter Store.")
+func getClaudeUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
+	fmt.Println("Retrieving Claude url from Parameter Store.")
 
 	ssmClient := ssm.NewFromConfig(config)
 	getUrlValue := &ssm.GetParameterInput{
@@ -141,7 +143,7 @@ func getChatGPTUrlFromParameterStore(config aws.Config, weatherUrlKey string) {
 
 	result, err := ssmClient.GetParameter(context.TODO(), getUrlValue)
 	if err != nil {
-		fmt.Println("Retrieving ChatGPT URL from Parameter store failed.")
+		fmt.Println("Retrieving Claude URL from Parameter store failed.")
 		fmt.Println(err)
 		fmt.Println("Exiting...")
 		os.Exit(1)

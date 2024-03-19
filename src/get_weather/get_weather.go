@@ -77,11 +77,11 @@ type WeatherData struct {
 }
 
 type SubWeatherData struct {
-	Weather []Weather `json:"weather"`
-	Main    Main      `json:"main"`
-	Wind    Wind      `json:"wind"`
-	Clouds  Clouds    `json:"clouds"`
-	Name    string    `json:"name"`
+	// Weather []Weather `json:"weather"`
+	Main   Main   `json:"main"`
+	Wind   Wind   `json:"wind"`
+	Clouds Clouds `json:"clouds"`
+	Name   string `json:"name"`
 }
 
 // Received event struct
@@ -100,7 +100,7 @@ func init() {
 	secretKey := os.Getenv("SECRET_KEY")
 	weatherUrlKey := os.Getenv("OPEN_WEATHER_URL_KEY")
 	region := os.Getenv("REGION")
-	sqsName = os.Getenv("SQS_QUEUE_NAME")
+	sqsName := os.Getenv("SQS_QUEUE_NAME")
 
 	// Exit if any initialization value is not set as we need all values for a successful execution.
 	if secretKey == "" || len(secretKey) == 0 || weatherUrlKey == "" || len(weatherUrlKey) == 0 || sqsName == "" || len(sqsName) == 0 {
@@ -140,11 +140,11 @@ func lambdaHandler(ctx context.Context /*, event Event*/) (string, error) {
 
 	// Extract `sub-details` for ChatGPT to supply ideas
 	subWeather := SubWeatherData{
-		Weather: responseData.Weather,
-		Main:    responseData.Main,
-		Wind:    responseData.Wind,
-		Clouds:  responseData.Clouds,
-		Name:    responseData.Name,
+		// Weather: responseData.Weather,
+		Main:   responseData.Main,
+		Wind:   responseData.Wind,
+		Clouds: responseData.Clouds,
+		// Name:   responseData.Name,
 	}
 
 	// Place details on SQS queue for lambda processing.
